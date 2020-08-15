@@ -1,34 +1,66 @@
-import React,{useEffect,useState} from 'react';
-import './App.css';
+import React, { Component } from 'react'
+import './App.css'
+import ActionCable from 'actioncable'
+import { EditorState } from 'draft-js';
+import { Editor } from 'react-draft-wysiwyg';
 
-const apiUrl = 'http://localhost:3001/notes/1';
 
+class App extends Component {
+  state = {
+    text: '',
+    sub: null,
+    editorState: EditorState.createEmpty(),
 
-function App() {
-  const [text,setText] = useState('');
-
-  useEffect(()=>{
-    window.fetch(apiUrl).then(data => {
-      data.json().then(res => {
-        setText(res.text);
-      })
-    })
-  },[]);
-
-  const handleChangeText = (e) =>{
-    e.preventDefault();
-    setText(e.target.value);
   }
 
-  return (
-    <div className="App">
-      <textarea
-        value={text}
-        onChange={handleChangeText}
-        cols="30"
-        rows="10"/>
-    </div>
-  );
+  componentDidMount() {
+    window.fetch('http://localhost:3001/notes/1').then(data => {
+      data.json().then(res => {
+        this.setState({ text: res.text })
+      })
+    })
+
+    const cable = ActionCable.createConsumer('ws://localhost:3001/cable')
+    const connect = cable.subscriptions.create('NotesChannel', {
+      received: this.handleReceiveNewText
+    })
+
+    this.setState({ sub: connect })
+  }
+
+  handleReceiveNewText = ({ text }) => {
+    if (text !== this.state.text) {
+      this.setState({ text })
+    }
+  }
+
+  handleChange = e => {
+    this.setState({ text: e.target.value })
+    this.state.sub.send({ text: e.target.value, id: 1 })
+  }
+
+  onEditorStateChange = (editorState) => {
+    this.setState({
+      editorState,
+    });
+  };
+  render() {
+    return (
+      <div>
+        <Editor
+          editorState={editorState}
+          wrapperClassName="demo-wrapper"
+          editorClassName="demo-editor"
+          onEditorStateChange={this.onEditorStateChange}
+        />
+        <textarea
+          value={this.state.text}
+          onChange={this.handleChange}
+        />
+      </div>
+
+    )
+  }
 }
 
-export default App;
+export default App
